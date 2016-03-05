@@ -13,7 +13,7 @@
 ------------------------------------------------------------------------------------------------------------------------------
 --// Setup
 
-local fonts = script; -- Feel free to change this
+local fonts = script.Parent.Parent:WaitForChild("Fonts"); -- Feel free to change this
 local http = game:GetService("HttpService"); -- Used for JSON decoding
 local content = game:GetService("ContentProvider"); -- Used to preload font atlases
 
@@ -267,6 +267,7 @@ function class_spritetext(font, class)
 	local font_mod, settings = fonts:FindFirstChild(font);
 	if font_mod then settings = class_settings(require(font_mod), object); else error(font.." could not be found in the font directory."); end;
 	local chars, ignore, props, events, background = {}, {}, {}, {};
+	local charData = {}
 
 	this.FullText = object.Text;
 	this.FontName = font;
@@ -347,12 +348,15 @@ function class_spritetext(font, class)
 		end;
 	end;
 
-	local function drawChar(byte, parent, pbyte)
+	local function drawChar(byte, parent, pbyte, cdataIndex)
 		local sprite = imgFrame:Clone();
 		sprite.Name = byte;
 		sprite.Parent = parent;
 		-- Carry over properties
 		sprite.ImageColor3 = object.TextColor3;
+		if charData[cdataIndex] then
+			sprite.ImageColor3 = charData[cdataIndex];
+		end
 		sprite.ImageTransparency = overide_props.TextTransparency;
 		sprite.ZIndex = object.ZIndex;
 		-- Image setup/placement
@@ -379,7 +383,7 @@ function class_spritetext(font, class)
 		local width, sprites, pbyte = 0, {};
 		for i = 1, #text do
 			local byte = string.byte(string.sub(text, i, i));
-			local char, kern = drawChar(byte, background, pbyte);
+			local char, kern = drawChar(byte, background, pbyte, i);
 			char.Position = char.Position + UDim2.new(0, width, 0, height);
 			width = width + (settings.data.sizes[settings.size].characters[byte].xadvance + kern) * this.Scale;
 			table.insert(sprites, char);
@@ -466,7 +470,13 @@ function class_spritetext(font, class)
 			if settings.use_enums and prop == "FontSize" then
 				this.FontPx = tonumber(string.match(object.FontSize.Name, "%d+$"));
 			elseif prop == "TextColor3" then
-				for _, char in pairs(chars) do char["ImageColor3"] = object[prop]; end;
+				for i, char in pairs(chars) do 
+					if charData[i] ~= nil then
+						char["ImageColor3"] = charData[i]; 
+					else
+						char["ImageColor3"] = object[prop]; 
+					end
+				end;
 			elseif prop == "ZIndex" then
 				for _, char in pairs(chars) do char[prop] = object[prop]; end;
 				background[prop] = object[prop];
@@ -501,6 +511,28 @@ function class_spritetext(font, class)
 	function this:TextFits()
 		return overide_props.TextFits;
 	end;
+	
+	function this:CharacterColor(index, color)
+		if type(color) == "userdata" then
+			if type(index) == "number" then
+				charData[index] = color
+			else
+				for i = index.Min, index.Max, 1 do
+					charData[i] = color
+				end
+			end
+		else
+			if type(index) == "number" then
+				return charData[index]
+			else
+				local tbl = {}
+				for i = index.Min, index.Max, 1 do
+					table.insert(tbl, charData[i])
+				end
+				return unpack(tbl)
+			end
+		end
+	end
 	
 	function this:Revert()
 		for _, event in pairs(events) do event:disconnect(); end;
