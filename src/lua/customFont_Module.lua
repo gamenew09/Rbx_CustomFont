@@ -22,6 +22,24 @@ imgFrame.Size = UDim2.new();
 imgFrame.BackgroundTransparency = 1;
 imgFrame.ScaleType = Enum.ScaleType.Stretch;
 
+local FontOffsets = { -- This is so horrible. This is needed to color correctly without the color shifting after size changes. DO NOT CHANGE.
+	[Enum.FontSize.Size8] = 0,
+	[Enum.FontSize.Size9] = 0,
+	[Enum.FontSize.Size10] = 0,
+	[Enum.FontSize.Size11] = 0,
+	[Enum.FontSize.Size12] = 0,
+	[Enum.FontSize.Size14] = 0,
+	[Enum.FontSize.Size18] = 1,
+	[Enum.FontSize.Size24] = 1,
+	[Enum.FontSize.Size28] = 1,
+	[Enum.FontSize.Size32] = 2,
+	[Enum.FontSize.Size36] = 3,
+	[Enum.FontSize.Size42] = 3,
+	[Enum.FontSize.Size48] = 3,
+	[Enum.FontSize.Size60] = 3,
+	[Enum.FontSize.Size96] = 3,
+}
+
 ------------------------------------------------------------------------------------------------------------------------------
 --// Functions
 
@@ -348,15 +366,12 @@ function class_spritetext(font, class)
 		end;
 	end;
 
-	local function drawChar(byte, parent, pbyte, cdataIndex)
+	local function drawChar(byte, parent, pbyte)
 		local sprite = imgFrame:Clone();
 		sprite.Name = byte;
 		sprite.Parent = parent;
 		-- Carry over properties
 		sprite.ImageColor3 = object.TextColor3;
-		if charData[cdataIndex] then
-			sprite.ImageColor3 = charData[cdataIndex];
-		end
 		sprite.ImageTransparency = overide_props.TextTransparency;
 		sprite.ZIndex = object.ZIndex;
 		-- Image setup/placement
@@ -377,13 +392,13 @@ function class_spritetext(font, class)
 		return sprite, kern;
 	end;
 
-	local function drawLine(text, height, tsprites)
+	local function drawLine(text, height, tsprites, tind)
 		local xalign = getAlignMultiplier(object.TextXAlignment);
 		local lheight = settings.data.sizes[settings.size].info.lineHeight * this.Scale;
 		local width, sprites, pbyte = 0, {};
 		for i = 1, #text do
 			local byte = string.byte(string.sub(text, i, i));
-			local char, kern = drawChar(byte, background, pbyte, i);
+			local char, kern = drawChar(byte, background, pbyte);
 			char.Position = char.Position + UDim2.new(0, width, 0, height);
 			width = width + (settings.data.sizes[settings.size].characters[byte].xadvance + kern) * this.Scale;
 			table.insert(sprites, char);
@@ -404,6 +419,7 @@ function class_spritetext(font, class)
 		local yalign, sprites, height, widths = getAlignMultiplier(object.TextYAlignment), {}, 0, {0};
 		local lineHeight = settings.data.sizes[settings.size].info.lineHeight * this.Scale;
 		-- Draw lines
+		local tind = 1
 		for _, line in pairs(lines) do
 			table.insert(widths, drawLine(line, height, sprites));
 			height = height + lineHeight;
@@ -414,6 +430,14 @@ function class_spritetext(font, class)
 		end;
 		-- TextFits
 		overide_props.TextFits = object.AbsoluteSize.x > math.max(unpack(widths)) and object.AbsoluteSize.y > height;
+		-- Color Text
+		local sizeOffest = FontOffsets[object.FontSize]
+		for i = 1, #text do
+			if charData[i] then
+				print("Index:", i, "Sprite Object:", sprites[i - sizeOffest])
+				sprites[i - sizeOffest].ImageColor3 = charData[i]; -- It seems like the sprites are based on size. What?
+			end
+		end
 	end;
 
 	local function clearAllText()
@@ -512,6 +536,10 @@ function class_spritetext(font, class)
 		return overide_props.TextFits;
 	end;
 	
+	function this:ClearCharacterColors()
+		charData = {}
+	end	
+	
 	function this:CharacterColor(index, color)
 		if type(color) == "userdata" then
 			if type(index) == "number" then
@@ -534,12 +562,19 @@ function class_spritetext(font, class)
 		end
 	end
 	
+	function this:ColorAfter(index, color)
+		for i = index, string.len(this.FullText), 1 do
+			this:CharacterColor(i, color)
+		end
+	end
+	
 	function this:Revert()
 		for _, event in pairs(events) do event:disconnect(); end;
 		for _, prop in pairs(props) do prop:Destroy(); end;
 		for _, ign in pairs(ignore) do ign:Destroy(); end;
 		object.TextTransparency = overide_props.TextTransparency;
 		object.BackgroundTransparency = overide_props.BackgroundTransparency;
+		this:ClearCharacterColors()
 		clearAllText();
 		this, events, props, ignore = nil, nil, nil, nil;
 		return object;
